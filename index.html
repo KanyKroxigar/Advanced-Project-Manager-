@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Project Manager (Local)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Tailwind CSS Dark Mode Config
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar { transition: transform 0.3s ease-in-out; }
+        @media (max-width: 768px) {
+            .sidebar-open { transform: translateX(0); }
+            .sidebar-closed { transform: translateX(-100%); }
+        }
+        .project-item:hover .project-actions { opacity: 1; }
+        .project-actions { opacity: 0; transition: opacity 0.2s ease-in-out; }
+        .task-item:hover .delete-task-btn { opacity: 1; }
+        .delete-task-btn { opacity: 0; transition: opacity 0.2s ease-in-out; }
+        
+        /* Toast Notification Animation */
+        .toast-enter {
+            opacity: 0;
+            transform: translateY(100%);
+        }
+        .toast-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .toast-exit {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast-exit-active {
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 300ms, transform 300ms;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <!-- App Container -->
+    <div id="app-container" class="h-screen w-screen flex">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar bg-white dark:bg-gray-800 w-72 p-4 border-r border-gray-200 dark:border-gray-700 flex flex-col absolute md:relative inset-y-0 left-0 z-20 md:translate-x-0 sidebar-closed">
+            <h2 class="text-2xl font-bold mb-4 flex items-center">
+                <svg class="h-6 w-6 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                Projects
+            </h2>
+            <div id="project-list" class="flex-grow overflow-y-auto space-y-1 pr-2"></div>
+            <div class="mt-4">
+                <input type="text" id="new-project-input" class="w-full p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="New project name...">
+                <button id="add-project-btn" class="w-full mt-2 bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 transition font-semibold">Add Project</button>
+            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-4 pt-4 border-t dark:border-gray-700 flex justify-between items-center">
+                <span id="user-info">Data is stored locally</span>
+                <div class="flex items-center space-x-2">
+                    <span>☀️</span>
+                    <label for="dark-mode-toggle" class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" value="" id="dark-mode-toggle" class="sr-only peer">
+                      <div class="w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                    <span>🌙</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col p-4 md:p-6 bg-gray-50 dark:bg-gray-900/50">
+            <button id="menu-toggle-btn" class="md:hidden fixed top-4 left-4 z-30 p-2 bg-white dark:bg-gray-700 rounded-full shadow-md">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+            </button>
+            
+            <div id="main-content-area" class="flex-1 flex flex-col">
+                <div id="project-header" class="mb-4">
+                    <h1 id="current-project-name" class="text-3xl font-bold"></h1>
+                    <p id="task-count" class="text-gray-500 dark:text-gray-400"></p>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm mb-4">
+                     <div class="flex flex-wrap md:flex-nowrap gap-3 items-center">
+                        <input type="text" id="new-task-input" placeholder="Add a new task..." class="flex-grow p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="date" id="new-task-due-date" class="p-2 border rounded-md text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                        <select id="new-task-priority" class="p-2 border rounded-md bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                        <button id="add-task-btn" class="bg-green-500 text-white font-semibold px-4 py-2 rounded-md hover:bg-green-600 transition w-full md:w-auto">Add Task</button>
+                    </div>
+                </div>
+
+                <div id="task-list-container" class="flex-1 overflow-y-auto bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                    <div id="task-list" class="space-y-3"></div>
+                    <div id="empty-state" class="hidden text-center py-12">
+                         <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-200">All caught up!</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add a new task to get started.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal for Confirmation/Editing -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div id="modal-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+            <div id="modal-body"></div>
+            <div id="modal-actions" class="mt-6 flex justify-end space-x-3"></div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
+    
+    <!-- Local Storage Logic -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- STATE MANAGEMENT ---
+        let state = {
+            projects: [],
+            tasks: {}, // { projectId: [tasks] }
+            currentProjectId: null,
+            darkMode: false,
+        };
+
+        const STORAGE_KEY = 'advancedTodoList';
+
+        // --- DOM ELEMENTS ---
+        const projectListEl = document.getElementById('project-list');
+        const taskListEl = document.getElementById('task-list');
+        const currentProjectNameEl = document.getElementById('current-project-name');
+        const taskCountEl = document.getElementById('task-count');
+        const emptyStateEl = document.getElementById('empty-state');
+        const modalOverlay = document.getElementById('modal-overlay');
+
+        // --- DATA HELPERS ---
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function loadData() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                state = JSON.parse(data);
+            }
+        }
+        
+        // --- INITIALIZATION ---
+        function initializeApp() {
+            loadData();
+            if (state.darkMode) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('dark-mode-toggle').checked = true;
+            }
+            renderAll();
+        }
+
+        // --- RENDERING ---
+        function renderAll() {
+            renderProjects();
+            if (!state.currentProjectId && state.projects.length > 0) {
+                selectProject(state.projects[0].id);
+            } else if (state.currentProjectId) {
+                selectProject(state.currentProjectId);
+            } else {
+                 currentProjectNameEl.textContent = "Create a Project";
+                 taskCountEl.textContent = "Get started by creating a project on the left.";
+                 taskListEl.innerHTML = '';
+                 emptyStateEl.classList.remove('hidden');
+            }
+        }
+        
+        function renderProjects() {
+            projectListEl.innerHTML = '';
+            // Sort projects by createdAt timestamp
+            const sortedProjects = [...state.projects].sort((a, b) => a.createdAt - b.createdAt);
+            
+            sortedProjects.forEach(project => {
+                const isActive = project.id === state.currentProjectId;
+                const li = document.createElement('li');
+                li.className = `project-item flex items-center justify-between p-2 rounded-md cursor-pointer transition ${isActive ? 'bg-blue-600 text-white font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`;
+                li.innerHTML = `
+                    <span class="truncate">${project.name}</span>
+                    <div class="project-actions flex items-center space-x-2">
+                        <button data-action="rename" class="text-gray-400 hover:text-blue-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L16.732 3.732z"></path></svg></button>
+                        <button data-action="delete" class="text-gray-400 hover:text-red-500"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                    </div>`;
+                
+                li.addEventListener('click', (e) => {
+                    const action = e.target.closest('button')?.dataset.action;
+                    if (action === 'rename') {
+                        showRenameProjectModal(project.id, project.name);
+                    } else if (action === 'delete') {
+                        showDeleteProjectModal(project.id, project.name);
+                    } else {
+                        selectProject(project.id);
+                    }
+                });
+                projectListEl.appendChild(li);
+            });
+        }
+        
+        function renderTasks() {
+            taskListEl.innerHTML = '';
+            const tasks = state.tasks[state.currentProjectId] || [];
+            
+            const sortedTasks = [...tasks].sort((a, b) => b.createdAt - a.createdAt);
+
+            taskCountEl.textContent = `${sortedTasks.length} task(s)`;
+            emptyStateEl.classList.toggle('hidden', sortedTasks.length > 0);
+
+            sortedTasks.forEach(task => {
+                const taskItem = document.createElement('div');
+                taskItem.className = `task-item flex items-center p-3 border-b border-gray-200 dark:border-gray-700 ${task.completed ? 'opacity-50' : ''}`;
+                const priorityClasses = { low: 'border-green-400', medium: 'border-yellow-400', high: 'border-red-400' };
+                taskItem.innerHTML = `
+                    <div class="flex-grow flex items-center border-l-4 ${priorityClasses[task.priority]} pl-3">
+                        <input type="checkbox" ${task.completed ? 'checked' : ''} class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-4 cursor-pointer bg-gray-50 dark:bg-gray-700">
+                        <div>
+                            <p class="font-medium ${task.completed ? 'line-through' : ''}">${task.text}</p>
+                            ${task.dueDate ? `<p class="text-xs text-gray-500 dark:text-gray-400">Due: ${task.dueDate}</p>` : ''}
+                        </div>
+                    </div>
+                    <button class="delete-task-btn ml-4 text-gray-400 hover:text-red-500"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>`;
+                taskItem.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleTask(task.id));
+                taskItem.querySelector('.delete-task-btn').addEventListener('click', () => deleteTask(task.id));
+                taskListEl.appendChild(taskItem);
+            });
+        }
+        
+        // --- LOGIC ---
+        function selectProject(projectId) {
+            state.currentProjectId = projectId;
+            const project = state.projects.find(p => p.id === projectId);
+            if (project) {
+                currentProjectNameEl.textContent = project.name;
+            }
+            renderProjects();
+            renderTasks();
+            saveData();
+        }
+
+        function handleAddProject() {
+            const input = document.getElementById('new-project-input');
+            const projectName = input.value.trim();
+            if (!projectName) return;
+            
+            const newProject = {
+                id: 'proj_' + Date.now(),
+                name: projectName,
+                createdAt: Date.now()
+            };
+            state.projects.push(newProject);
+            state.tasks[newProject.id] = [];
+            
+            input.value = '';
+            selectProject(newProject.id);
+            showToast('Project created successfully!', 'success');
+        }
+
+        function handleAddTask() {
+            if (!state.currentProjectId) { showToast('Please select a project first.', 'error'); return; }
+            
+            const input = document.getElementById('new-task-input');
+            const taskText = input.value.trim();
+            if (!taskText) return;
+            
+            const newTask = {
+                id: 'task_' + Date.now(),
+                text: taskText,
+                completed: false,
+                priority: document.getElementById('new-task-priority').value,
+                dueDate: document.getElementById('new-task-due-date').value,
+                createdAt: Date.now()
+            };
+            
+            state.tasks[state.currentProjectId].push(newTask);
+            
+            input.value = '';
+            document.getElementById('new-task-due-date').value = '';
+            
+            renderTasks();
+            saveData();
+        }
+        
+        function toggleTask(taskId) {
+            const task = state.tasks[state.currentProjectId].find(t => t.id === taskId);
+            if (task) {
+                task.completed = !task.completed;
+            }
+            renderTasks();
+            saveData();
+        }
+        
+        function deleteTask(taskId) {
+            state.tasks[state.currentProjectId] = state.tasks[state.currentProjectId].filter(t => t.id !== taskId);
+            renderTasks();
+            saveData();
+        }
+
+        function renameProject(projectId, newName) {
+            const project = state.projects.find(p => p.id === projectId);
+            if (project) {
+                project.name = newName;
+            }
+            hideModal();
+            renderAll();
+            showToast('Project renamed successfully!', 'success');
+        }
+
+        function deleteProject(projectId) {
+            state.projects = state.projects.filter(p => p.id !== projectId);
+            delete state.tasks[projectId];
+            
+            if (state.currentProjectId === projectId) {
+                state.currentProjectId = null;
+            }
+            
+            hideModal();
+            renderAll();
+            showToast('Project deleted successfully!', 'success');
+        }
+
+        // --- UI UTILITY FUNCTIONS (MODAL, TOAST, DARK MODE) ---
+        function showModal(title, body, actions) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-body').innerHTML = body;
+            const actionsEl = document.getElementById('modal-actions');
+            actionsEl.innerHTML = '';
+            actions.forEach(action => {
+                const button = document.createElement('button');
+                button.textContent = action.label;
+                button.className = action.class;
+                button.onclick = action.handler;
+                actionsEl.appendChild(button);
+            });
+            modalOverlay.classList.remove('hidden');
+        }
+
+        function hideModal() { modalOverlay.classList.add('hidden'); }
+
+        function showRenameProjectModal(projectId, currentName) {
+            showModal(
+                'Rename Project',
+                `<input type="text" id="rename-project-input" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" value="${currentName}">`,
+                [
+                    { label: 'Cancel', class: 'px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500', handler: hideModal },
+                    { label: 'Save', class: 'px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700', handler: () => {
+                        const newName = document.getElementById('rename-project-input').value.trim();
+                        if (newName) renameProject(projectId, newName);
+                    }}
+                ]
+            );
+        }
+
+        function showDeleteProjectModal(projectId, projectName) {
+             showModal(
+                'Delete Project',
+                `<p>Are you sure you want to delete the project "<strong>${projectName}</strong>"? This will also delete all of its tasks. This action cannot be undone.</p>`,
+                [
+                    { label: 'Cancel', class: 'px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500', handler: hideModal },
+                    { label: 'Delete', class: 'px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700', handler: () => deleteProject(projectId) }
+                ]
+            );
+        }
+        
+        function showToast(message, type = 'info') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const toast = document.createElement('div');
+            toast.className = `toast-enter text-white px-4 py-2 rounded-md shadow-lg transition-all transform ${colors[type]}`;
+            toast.textContent = message;
+            document.getElementById('toast-container').appendChild(toast);
+            
+            requestAnimationFrame(() => toast.classList.add('toast-enter-active'));
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter-active');
+                toast.classList.add('toast-exit-active');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 3000);
+        }
+        
+        // --- EVENT LISTENERS ---
+        document.getElementById('add-project-btn').addEventListener('click', handleAddProject);
+        document.getElementById('new-project-input').addEventListener('keypress', (e) => e.key === 'Enter' && handleAddProject());
+        document.getElementById('add-task-btn').addEventListener('click', handleAddTask);
+        document.getElementById('new-task-input').addEventListener('keypress', (e) => e.key === 'Enter' && handleAddTask());
+
+        const sidebar = document.getElementById('sidebar');
+        document.getElementById('menu-toggle-btn').addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-closed');
+            sidebar.classList.toggle('sidebar-open');
+        });
+        document.addEventListener('click', (e) => {
+            if (!sidebar.contains(e.target) && !document.getElementById('menu-toggle-btn').contains(e.target) && sidebar.classList.contains('sidebar-open')) {
+                sidebar.classList.add('sidebar-closed');
+                sidebar.classList.remove('sidebar-open');
+            }
+        });
+        modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) hideModal(); });
+
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        darkModeToggle.addEventListener('change', () => {
+            state.darkMode = darkModeToggle.checked;
+            document.documentElement.classList.toggle('dark', state.darkMode);
+            saveData();
+        });
+
+        // Start the app
+        initializeApp();
+    });
+    </script>
+</body>
+</html>
